@@ -96,13 +96,14 @@ byte currentState;
 
 void setColor(unsigned int color);
 void setup(){
+    Serial.begin(9600);     // opens serial port, sets data rate to 9600 bps
+      while (!Serial); // Wait for serial port to connect - used on Leonardo, Teensy and other boards with built-in USB CDC serial connection
   RF_ADDRESS[0] = 'N';
   RF_ADDRESS[1] = 'O';
   RF_ADDRESS[2] = 'D';
   RF_ADDRESS[3] = 'E';
   RF_ADDRESS[4] = '1';
 
-  Serial.begin(9600);     // opens serial port, sets data rate to 9600 bps
   /* Define the DIO used for SPI CSN & CE. Defaults are DIO
    *  10 & 9 respectively. */
   Mirf.cePin = 9;
