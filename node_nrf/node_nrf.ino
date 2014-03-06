@@ -39,14 +39,14 @@
 #define RFTYPE_CMD 4
 #define RFTYPE_LED 5
 
-uint8_t RF_ADDRESS[5];
+char RF_ADDRESS[5];
 /* Stores the current analogue input value */
 byte incomingByte = 0;   // for incoming serial data
 byte currentColor = 0;
 
 struct NODE{
   byte nodeNumber;
-  uint8_t address[5];
+  char address[5];
 };
 
 NODE nodeInfo;
@@ -169,8 +169,9 @@ void loop()
   switch(currentState){
   case STATE_INIT:
     packet.type = RFTYPE_REGISTER;
-    memcpy(packet.pktTypes.INIT.newNode.address, RF_ADDRESS, 5);
+    memcpy(&packet.pktTypes.INIT.newNode.address, &RF_ADDRESS, 5);
     Mirf.send((byte *)&packet);
+    Serial.println("registering to homebase");
     while(Mirf.isSending());                 
     attachInterrupt(1,rf_interupt,LOW);
     currentState = STATE_REGISTER;
