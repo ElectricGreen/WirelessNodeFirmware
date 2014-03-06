@@ -153,9 +153,11 @@ void rf_interupt(){
   if(!Mirf.isSending() && Mirf.dataReady()){
     Serial.println("Got packet");
     Mirf.getData((byte*)&packet);
+    Serial.print("Type");
+    Serial.println(packet.type);
     switch(packet.type){
     case RFTYPE_ACCEPTED:
-      if (packet.pktTypes.INIT.newNode.address == RF_ADDRESS){
+      if (strcmp(RF_ADDRESS, packet.pktTypes.INIT.newNode.address)  == 0){
         nodeInfo.nodeNumber = packet.pktTypes.INIT.newNode.nodeNumber;
         currentState = STATE_RUNNING;
       }
@@ -180,7 +182,7 @@ void loop()
     //Wait for interupt or timeout and resend register
     break;
   case STATE_RUNNING:
-
+      
     break;
   case STATE_ERROR:
     break;
