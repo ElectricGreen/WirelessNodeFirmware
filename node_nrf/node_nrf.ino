@@ -60,8 +60,8 @@ struct PACKET{
     INIT;
     struct UPDATE{
       byte nodeNumber;
-      uint8_t soilSensor1;
-      uint8_t soilSensor2;
+      uint8_t soilSensor;
+      uint8_t battery;
       uint8_t light;
       uint16_t temperature;
     }
@@ -81,6 +81,7 @@ struct PACKET{
 };
 
 PACKET packet;
+
 #define SOIL_PIN   5
 
 #define RGB_RED    3
@@ -93,16 +94,15 @@ PACKET packet;
 #define STATE_ERROR 3
 
 byte currentState;
+uint32_t timer = 0;
 
 void setColor(unsigned int color);
 void setup(){
     Serial.begin(9600);     // opens serial port, sets data rate to 9600 bps
       while (!Serial); // Wait for serial port to connect - used on Leonardo, Teensy and other boards with built-in USB CDC serial connection
-  RF_ADDRESS[0] = 'N';
-  RF_ADDRESS[1] = 'O';
-  RF_ADDRESS[2] = 'D';
-  RF_ADDRESS[3] = 'E';
-  RF_ADDRESS[4] = '1';
+
+      memcpy(&nodeInfo.address, &"NODE1", 5);
+
 
   /* Define the DIO used for SPI CSN & CE. Defaults are DIO
    *  10 & 9 respectively. */
@@ -116,8 +116,7 @@ void setup(){
 
   /* Set the receiving address of this module. This must be a 5 byte
    *  character string */
-  Mirf.setRADDR((byte *)RF_ADDRESS);
-  Mirf.setTADDR((byte *)"BASE1");
+  Mirf.setRADDR((byte *)nodeInfo.address);
 
   Mirf.payload = sizeof(packet);
 
@@ -151,20 +150,7 @@ void setColor(unsigned int color, byte value){
 }
 
 void rf_interupt(){
-  if(!Mirf.isSending() && Mirf.dataReady()){
-    Serial.println("Got packet");
-    Mirf.getData((byte*)&packet);
-    Serial.print("Type");
-    Serial.println(packet.type);
-    switch(packet.type){
-    case RFTYPE_ACCEPTED:
-      if (strcmp(RF_ADDRESS, packet.pktTypes.INIT.newNode.address)  == 0){
-        nodeInfo.nodeNumber = packet.pktTypes.INIT.newNode.nodeNumber;
-        currentState = STATE_RUNNING;
-      }
-      break;     
-    }
-  }
+
 }
 /******* Main Program ********/
 void loop()
@@ -172,18 +158,61 @@ void loop()
   switch(currentState){
   case STATE_INIT:
     packet.type = RFTYPE_REGISTER;
-    memcpy(&packet.pktTypes.INIT.newNode.address, &RF_ADDRESS, 5);
+    memcpy(&packet.pktTypes.INIT.newNode.address, &nodeInfo.address, 5);
+      Mirf.setTADDR((byte *)"BASE1");
     Mirf.send((byte *)&packet);
-    Serial.println("registering to homebase");
     while(Mirf.isSending());                 
-    attachInterrupt(1,rf_interupt,LOW);
+    Serial.println("registering to homebase");
+      Mirf.setRADDR((byte *)nodeInfo.address);
     currentState = STATE_REGISTER;
     break;
   case STATE_REGISTER:
+    if(!Mirf.isSending() && Mirf.dataReady()){
+    Serial.println("Got packet");
+    Mirf.getData((byte*)&packet);
+    Serial.print("Type");
+    Serial.println(packet.type);
+    switch(packet.type){
+    case RFTYPE_ACCEPTED:
+    Serial.print("Address: ");
+    Serial.println(packet.pktTypes.INIT.newNode.address);
+        Serial.println(nodeInfo.address);
+
+      if (strncmp(nodeInfo.address, (const char*)packet.pktTypes.INIT.newNode.address,5) == 0){
+        nodeInfo.nodeNumber = packet.pktTypes.INIT.newNode.nodeNumber;
+        currentState = STATE_RUNNING;
+            Serial.println("Moving to Run State");
+      }
+      break;     
+    }
+  }
     //Wait for interupt or timeout and resend register
     break;
   case STATE_RUNNING:
+      if (millis() - timer >= 2000)  {
       
+      //obtain and send analog reading from soil sensor
+      int sensorValue = analogRead(SOIL_PIN);
+      // Convert the analog reading (which goes from 0 - 1023) to a percentage:
+      float percentMoisture = 1 - (sensorValue-200)*(0.12195);//.0012195 = 1/800=range between wet and dry soil
+      // print out the value you read:
+      Serial.println(percentMoisture);
+  
+      packet.type = RFTYPE_UPDATE;
+      packet.pktTypes.UPDATE.nodeNumber = nodeInfo.nodeNumber;
+      packet.pktTypes.UPDATE.soilSensor = percentMoisture;
+      packet.pktTypes.UPDATE.battery = 55;
+            packet.pktTypes.UPDATE.light = 66;
+                  packet.pktTypes.UPDATE.temperature = 77;
+                    Mirf.setTADDR((byte *)"BASE1");
+      Mirf.send((byte *)&packet);
+        while(Mirf.isSending());                 
+
+      Serial.println("Sending soil data");
+      delay(100);
+      
+      timer = millis();
+    }
     break;
   case STATE_ERROR:
     break;
