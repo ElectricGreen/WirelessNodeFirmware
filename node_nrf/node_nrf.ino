@@ -31,7 +31,10 @@
 
 #define PKT_UPDATE 0x05 
 #define PKT_CMD 0x06 
-#define PKT_LED 0x07
+
+#define CMD_SET_RED    0x50
+#define CMD_SET_GREEN  0x51
+#define CMD_SET_BLUE   0x52
 
 #define RFTYPE_REGISTER 1
 #define RFTYPE_ACCEPTED 2
@@ -84,6 +87,7 @@ PACKET packet;
 
 #define SOIL_PIN   5
 
+//LED Pins
 #define RGB_RED    3
 #define RGB_GREEN  5
 #define RGB_BLUE   6
@@ -98,8 +102,8 @@ uint32_t timer = 0;
 
 void setColor(unsigned int color);
 void setup(){
-    Serial.begin(9600);     // opens serial port, sets data rate to 9600 bps
-      while (!Serial); // Wait for serial port to connect - used on Leonardo, Teensy and other boards with built-in USB CDC serial connection
+    //Serial.begin(9600);     // opens serial port, sets data rate to 9600 bps
+     // while (!Serial); // Wait for serial port to connect - used on Leonardo, Teensy and other boards with built-in USB CDC serial connection
 
       memcpy(&nodeInfo.address, &"NODE1", 5);
 
@@ -131,22 +135,27 @@ void setup(){
   pinMode(RGB_BLUE, OUTPUT);      // sets the digital pin as output\\\\\\\\\\
 
   currentState = STATE_INIT;
-  Serial.println("Module initialised");
+ // Serial.println("Module initialised");
 }
 
 
-void setColor(unsigned int color, byte value){
+void setColor(byte color, byte value){
   switch(color){
-  case RGB_RED:
-    analogWrite(RGB_RED,incomingByte);
+  case CMD_SET_RED:
+  //  Serial.print("Set Red:");
+    analogWrite(RGB_RED,value);
     break;
-  case RGB_GREEN:
-    analogWrite(RGB_GREEN,incomingByte);
+  case CMD_SET_GREEN:
+    //  Serial.print("Set Green:");
+    analogWrite(RGB_GREEN,value);
     break;
-  case RGB_BLUE:
-    analogWrite(RGB_BLUE,incomingByte);
+  case CMD_SET_BLUE:
+     // Serial.print("Set Blue:");
+    analogWrite(RGB_BLUE,value);
     break;
-  }              
+  }
+     // Serial.println(value);
+  
 }
 
 void rf_interupt(){
@@ -162,26 +171,26 @@ void loop()
       Mirf.setTADDR((byte *)"BASE1");
     Mirf.send((byte *)&packet);
     while(Mirf.isSending());                 
-    Serial.println("registering to homebase");
+   // Serial.println("registering to homebase");
       Mirf.setRADDR((byte *)nodeInfo.address);
     currentState = STATE_REGISTER;
     break;
   case STATE_REGISTER:
     if(!Mirf.isSending() && Mirf.dataReady()){
-    Serial.println("Got packet");
+   // Serial.println("Got packet");
     Mirf.getData((byte*)&packet);
-    Serial.print("Type");
-    Serial.println(packet.type);
+   // Serial.print("Type");
+   // Serial.println(packet.type);
     switch(packet.type){
     case RFTYPE_ACCEPTED:
-    Serial.print("Address: ");
-    Serial.println(packet.pktTypes.INIT.newNode.address);
-        Serial.println(nodeInfo.address);
+    //Serial.print("Address: ");
+    //Serial.println(packet.pktTypes.INIT.newNode.address);
+    //    Serial.println(nodeInfo.address);
 
       if (strncmp(nodeInfo.address, (const char*)packet.pktTypes.INIT.newNode.address,5) == 0){
         nodeInfo.nodeNumber = packet.pktTypes.INIT.newNode.nodeNumber;
         currentState = STATE_RUNNING;
-            Serial.println("Moving to Run State");
+       //     Serial.println("Moving to Run State");
       }
       break;     
     }
@@ -189,30 +198,47 @@ void loop()
     //Wait for interupt or timeout and resend register
     break;
   case STATE_RUNNING:
-      if (millis() - timer >= 2000)  {
-      
-      //obtain and send analog reading from soil sensor
-      int sensorValue = analogRead(SOIL_PIN);
-      // Convert the analog reading (which goes from 0 - 1023) to a percentage:
-      float percentMoisture = 1 - (sensorValue-200)*(0.12195);//.0012195 = 1/800=range between wet and dry soil
-      // print out the value you read:
-      Serial.println(percentMoisture);
-  
-      packet.type = RFTYPE_UPDATE;
-      packet.pktTypes.UPDATE.nodeNumber = nodeInfo.nodeNumber;
-      packet.pktTypes.UPDATE.soilSensor = percentMoisture;
-      packet.pktTypes.UPDATE.battery = 55;
-            packet.pktTypes.UPDATE.light = 66;
-                  packet.pktTypes.UPDATE.temperature = 77;
-                    Mirf.setTADDR((byte *)"BASE1");
-      Mirf.send((byte *)&packet);
-        while(Mirf.isSending());                 
-
-      Serial.println("Sending soil data");
-      delay(100);
-      
-      timer = millis();
+      //Check For any recieved messages
+      if(!Mirf.isSending() && Mirf.dataReady()){
+    //Serial.println("Got packet");
+    Mirf.getData((byte*)&packet);
+  //  Serial.print("Type");
+  //  Serial.println(packet.type);
+    switch(packet.type){
+    case RFTYPE_ACCEPTED:
+  //  Serial.print("Another Node Registered");
+  //  Serial.print("Address: ");
+  //  Serial.println(packet.pktTypes.INIT.newNode.address);
+  //      Serial.println(nodeInfo.address);    
+      break;
+      case RFTYPE_LED:
+      setColor(packet.pktTypes.LED.color, packet.pktTypes.LED.value);
     }
+  }
+//      if (millis() - timer >= 2000)  {
+//      
+//      //obtain and send analog reading from soil sensor
+//      int sensorValue = analogRead(SOIL_PIN);
+//      // Convert the analog reading (which goes from 0 - 1023) to a percentage:
+//      float percentMoisture = 1 - (sensorValue-200)*(0.12195);//.0012195 = 1/800=range between wet and dry soil
+//      // print out the value you read:
+//      Serial.println(percentMoisture);
+//  
+//      packet.type = RFTYPE_UPDATE;
+//      packet.pktTypes.UPDATE.nodeNumber = nodeInfo.nodeNumber;
+//      packet.pktTypes.UPDATE.soilSensor = percentMoisture;
+//      packet.pktTypes.UPDATE.battery = 55;
+//            packet.pktTypes.UPDATE.light = 66;
+//                  packet.pktTypes.UPDATE.temperature = 77;
+//                    Mirf.setTADDR((byte *)"BASE1");
+//      Mirf.send((byte *)&packet);
+//        while(Mirf.isSending());                 
+//
+//      Serial.println("Sending soil data");
+//      delay(100);
+//      
+//      timer = millis();
+//    }
     break;
   case STATE_ERROR:
     break;
